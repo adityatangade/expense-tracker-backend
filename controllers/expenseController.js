@@ -1,15 +1,17 @@
 const Expense = require("../models/Expense");
+const mongoose = require("mongoose");
 
 // Add expense
 exports.addExpense = async (req, res) => {
   try {
-    const { amount, category, description } = req.body;
+    const { amount, category, description, date } = req.body;
 
     const expense = new Expense({
       userId: req.user.userId,
       amount,
       category,
       description,
+      date: date || Date.now()
     });
 
     await expense.save();
@@ -25,13 +27,14 @@ exports.addExpense = async (req, res) => {
 exports.getExpenses = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { category, startDate, endDate } = req.query;
+
+    const { category, startDate, endDate, year, month } = req.query;
 
     let filter = { userId };
 
     // 🔹 Filter by category
     if (category) {
-      filter.category = category;
+      filter.category = { $regex: category, $options: "i" };
     }
 
     // 🔹 Filter by date range
@@ -42,16 +45,33 @@ exports.getExpenses = async (req, res) => {
       };
     }
 
+    // 🔹 Filter by year
+    if (year) {
+      const start = new Date(year, 0, 1);
+      const end = new Date(year, 11, 31, 23, 59, 59);
+
+      filter.date = { $gte: start, $lte: end };
+    }
+
+    // 🔹 Filter by month (with optional year)
+    if (month) {
+      const selectedYear = year || new Date().getFullYear();
+
+      const start = new Date(selectedYear, month - 1, 1);
+      const end = new Date(selectedYear, month, 0, 23, 59, 59);
+
+      filter.date = { $gte: start, $lte: end };
+    }
+
     const expenses = await Expense.find(filter)
-      .sort({ date: -1, createdAt: -1 }); // Latest first
+      .sort({ date: -1, createdAt: -1 });
 
     res.json(expenses);
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
-};
-
-// Delete expense
+};// Delete expense
 exports.deleteExpense = async (req, res) => {
   try {
     await Expense.findByIdAndDelete(req.params.id);
@@ -90,3 +110,29 @@ exports.updateExpense = async (req, res) => {
   }
 };
 
+exports.getCategorySummary = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const summary = await Expense.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId)
+        }
+      },
+      {
+        $group: {
+          _id: "$category",
+          totalAmount: { $sum: "$amount" }
+        }
+      },
+      {
+        $sort: { totalAmount: -1 }
+      }
+    ]);
+
+    res.json(summary);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

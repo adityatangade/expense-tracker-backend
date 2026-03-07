@@ -18,6 +18,9 @@ app.use("/api/auth", authRoutes);
 const expenseRoutes = require("./routes/expenseRoutes");
 app.use("/api/expenses", expenseRoutes);
 
+//dashboard
+const dashboardRoutes = require("./routes/dashboardRoutes");
+app.use("/api/dashboard", dashboardRoutes);
 
 // Test route
 app.get("/", (req, res) => {
